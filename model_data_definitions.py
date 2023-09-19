@@ -21,12 +21,12 @@ def fetch_return_filtered_pmlb_data_sets():
     metadata = pd.read_csv(metadata_path, sep='\t')
 
     filtered_datasets = metadata[
-        (metadata['n_features'] < 5) &
+        (metadata['n_features'] < 7) &
         (metadata['n_binary_features'] == 0) &
         (metadata['n_categorical_features'] == 0) &
         (metadata['n_continuous_features'] == metadata['n_features'] ) &
-        (metadata['n_instances'] >= 500) &
-        (metadata['n_instances'] <= 1000) &
+        #(metadata['n_instances'] >= 500) &
+        #(metadata['n_instances'] <= 1000) &
         (metadata['endpoint_type'] == 'continuous') &
         (metadata['task'] == 'regression')
     ]
