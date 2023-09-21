@@ -101,7 +101,16 @@ def compile_models(models, optimizer='adam', loss='mean_absolute_error'):
     """Compile TensorFlow/Keras models."""
     for model, name in models:
         model.compile(optimizer=optimizer, loss=loss)
-
+        
+def preprocess_target_values(train_data, test_data):
+    """Preprocess the data by zero-centering, scaling to unit variance, and applying a sigmoid."""
+    bias = np.mean(train_data, axis=0)
+    variance = np.std(train_data, axis=0)
+    
+    train_data = (train_data - bias) / variance
+    test_data = (test_data - bias) / variance
+    
+    return train_data, test_data
 
 def preprocess_data(train_data, test_data):
     """Preprocess the data by zero-centering, scaling to unit variance, and applying a sigmoid."""
@@ -178,6 +187,42 @@ def create_deep_relu_ann(input_dim: int, hidden_units: int, hidden_layers: int, 
     return model 
 
 class LookupTableModel(tf.keras.Model):
+    def __init__(self, input_dim: int, partition_num: int, output_dim: int = 1,
+                 default_val: float = 0.0, seed: int = 55):
+        super(LookupTableModel, self).__init__()
+        self.input_dim = input_dim
+        self.partition_num = partition_num
+        initializer = tf.keras.initializers.RandomUniform(seed=seed)
+        self.embedding = tf.keras.layers.Embedding(partition_num**input_dim + 1, output_dim,
+                                                   embeddings_initializer=initializer)
+        self.default_val = tf.constant(default_val, dtype=tf.float32)
+
+        # Set last entry in embedding to be default value
+        self.embedding.build((None,))
+        self.embedding.set_weights([tf.concat([self.embedding.weights[0].numpy()[:-1],
+                                               [[default_val]*output_dim]], axis=0)])
+        
+        # Changed to integer type
+        self.partition_num_powers = tf.cast(tf.pow(partition_num, tf.range(input_dim)), dtype=tf.int32)
+
+    def call(self, inputs: tf.Tensor) -> tf.Tensor:
+        # ReLU operation to drop negative inputs 
+        inputs = tf.maximum(0., inputs)
+
+        # Scale, floor and cast to integers
+        scaled_input = tf.cast(tf.floor(inputs * self.partition_num), dtype=tf.int32)
+
+        # Bounding the indices by partition number - 1
+        bounded_inputs = tf.minimum(scaled_input, self.partition_num - 1)
+
+        # Flatten each vector to get a single index for each sample.
+        indices = tf.reduce_sum(bounded_inputs * self.partition_num_powers, axis=1)
+
+        
+        outputs = self.embedding(indices)
+        return outputs
+'''
+class LookupTableModel(tf.keras.Model):
     """A lookup table model.
     
     Attributes:
@@ -225,7 +270,7 @@ class LookupTableModel(tf.keras.Model):
         safe_indices = tf.where(mask_in_range, indices, self.partition_num**self.input_dim)
         outputs = self.embedding(safe_indices)
         return outputs
-
+'''
 
 class ABELSpline(keras.Model):
     """
